@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Pulse: Resonance Flow</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --c-cyan: #00f3ff;
+            --c-pink: #ff00ff;
+            --c-gold: #ffd700;
+            --c-red: #ff3333;
+            --c-white: #ffffff;
+            --c-void: #050011;
+            --c-glass: rgba(5, 0, 17, 0.85);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--c-void);
+            font-family: 'Orbitron', sans-serif;
+            touch-action: none; /* Crucial for mobile swipe */
+            user-select: none;
+            cursor: crosshair;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- UI OVERLAY --- */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Header Area */
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent);
+            z-index: 10;
+        }
+
+        .hud-stat-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .hud-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 1px;
+        }
+
+        .hud-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--c-cyan);
+            text-shadow: 0 0 10px var(--c-cyan);
+            transition: color 1s, text-shadow 1s;
+        }
+
+        /* Lives Pips */
+        .life-pip {
+            width: 20px;
+            height: 6px;
+            background: var(--c-cyan);
+            display: inline-block;
+            margin-right: 4px;
+            box-shadow: 0 0 8px var(--c-cyan);
+            transform: skew(-20deg);
+            transition: all 0.3s;
+        }
+        .life-pip.lost {
+            background: #333;
+            box-shadow: none;
+        }
+
+        /* --- TELEMETRY SIDEBAR (Right) --- */
+        #telemetry-panel {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            width: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            font-family: 'Share Tech Mono', monospace;
+            text-align: right;
+            z-index: 5;
+        }
+
+        .t-module {
+            border-right: 2px solid var(--c-pink);
+            padding-right: 12px;
+            background: linear-gradient(to left, rgba(255, 0, 255, 0.05), transparent);
+            transition: border-color 1s, background 1s;
+        }
+
+        .t-label {
+            font-size: 9px;
+            color: var(--c-pink);
+            margin-bottom: 2px;
+            transition: color 1s;
+        }
+
+        .t-data {
+            font-size: 12px;
+            color: var(--c-cyan);
+            text-shadow: 0 0 2px var(--c-cyan);
+            transition: color 1s, text-shadow 1s;
+        }
+
+        /* Combat Log */
+        #sys-log {
+            margin-top: 10px;
+            height: 100px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            font-size: 10px;
+            opacity: 0.8;
+            border-right: 2px solid var(--c-cyan);
+            padding-right: 12px;
+        }
+        .log-line { margin-top: 4px; }
+        .log-line.warn { color: var(--c-red); }
+        .log-line.gold { color: var(--c-gold); font-weight: bold; }
+        .log-line.info { color: var(--c-cyan); }
+
+        /* --- SCREENS --- */
+        .screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--c-glass);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+            transition: opacity 0.5s;
+        }
+
+        h1 {
+            font-size: 48px;
+            color: var(--c-pink);
+            text-shadow: 4px 4px 0 var(--c-cyan);
+            margin: 0 0 10px 0;
+            font-style: italic;
+            letter-spacing: -2px;
+        }
+
+        .tagline {
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--c-cyan);
+            margin-bottom: 40px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        button {
+            background: transparent;
+            border: 2px solid var(--c-cyan);
+            color: var(--c-cyan);
+            padding: 15px 40px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: 0.3s;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+        }
+
+        button:hover {
+            background: rgba(0, 243, 255, 0.1);
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.6);
+            letter-spacing: 4px;
+        }
+
+        /* --- LICENSE FOOTER (Integrated) --- */
+        .license-block {
+            margin-top: 40px;
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.5);
+            width: 80%;
+            max-width: 400px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: #888;
+            text-align: left;
+            line-height: 1.4;
+        }
+        .license-block strong { color: #ccc; display: block; margin-bottom: 4px; }
+        .license-link { 
+            display: block; 
+            margin-top: 8px; 
+            color: var(--c-gold); 
+            text-decoration: none; 
+            text-align: center;
+            border: 1px dashed rgba(255, 215, 0, 0.3);
+            padding: 4px;
+        }
+        .license-link:hover { background: rgba(255, 215, 0, 0.1); }
+
+        .hidden { display: none !important; opacity: 0; pointer-events: none; }
+
+        /* Responsive Tweaks */
+        @media (max-width: 600px) {
+            #telemetry-panel { width: 140px; font-size: 10px; top: 90px; right: 10px; }
+            h1 { font-size: 32px; }
+            .hud-value { font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <!-- HEADER HUD -->
+        <div class="hud-header">
+            <div class="hud-stat-group">
+                <span class="hud-label">DATA INTEGRITY</span>
+                <span class="hud-value" id="score-val">0 / 2500</span>
+            </div>
+            <div class="hud-stat-group" style="align-items: flex-end;">
+                <span class="hud-label">SYSTEM STATUS</span>
+                <div id="lives-container">
+                    <div class="life-pip"></div>
+                    <div class="life-pip"></div>
+                    <div class="life-pip"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT TELEMETRY -->
+        <div id="telemetry-panel">
+            <div class="t-module" id="mod-coords">
+                <div class="t-label">VECTOR</div>
+                <div class="t-data" id="val-coords">X:000</div>
+            </div>
+            <div class="t-module" id="mod-osc">
+                <div class="t-label">OSCILLATION</div>
+                <div class="t-data" id="val-osc">NOMINAL</div>
+            </div>
+            <div class="t-module" id="mod-threat">
+                <div class="t-label">ENTROPY LEVEL</div>
+                <div class="t-data" id="val-threat">1.0x</div>
+            </div>
+            
+            <div id="sys-log">
+                <div class="log-line info">> KERNEL LOADED</div>
+                <div class="log-line info">> PROTOCOL: SURVIVE</div>
+            </div>
+        </div>
+        
+        <!-- FOOTER -->
+        <div style="position: absolute; bottom: 10px; width: 100%; text-align: center; font-family: 'Share Tech Mono'; font-size: 10px; color: #555;">
+            v4.1 Hardened | <a href="https://example.com/proof-of-resonance" style="color: #777; text-decoration: none;">Proof of Resonance</a>
+        </div>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="start-screen" class="screen-overlay">
+        <h1>NEON PULSE</h1>
+        <div class="tagline">Resonance Flow Edition</div>
+        
+        <button id="btn-start">INITIATE SEQUENCE</button>
+
+        <div class="license-block">
+            <strong>Copyright (c) 2025 Antonio Ricardo Alvarez Marin</strong>
+            This software operates under the <strong>Pacto de Convicción Naciente (NCL-1.0)</strong> and <strong>Pacto de Descubrimiento (DHUL-1.0)</strong>.
+            <br><br>
+            <em>"It's a process and not a destination."</em>
+            <a href="#" class="license-link">VIEW PROOF OF RESONANCE</a>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="game-over-screen" class="screen-overlay hidden">
+        <h1 style="color: var(--c-red); text-shadow: none;">SIGNAL LOST</h1>
+        <div class="tagline" id="final-score-disp">DATA: 0</div>
+        
+        <button id="btn-restart">RE-ESTABLISH LINK</button>
+        
+        <div class="license-block" style="border-color: var(--c-red);">
+            <strong>STATUS: DISCONNECTED</strong>
+            (c) 2025 Antonio Ricardo Alvarez Marin
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        /**
+         * NEON PULSE: RESONANCE FLOW
+         * v4.1: Level Hardening Dynamics
+         * Implements progressive difficulty scaling based on score.
+         */
+
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            colors: {
+                cyan: '#00f3ff',
+                pink: '#ff00ff',
+                gold: '#ffd700',
+                red: '#ff3333',
+                bg: '#050011',
+                white: '#ffffff'
+            },
+            game: {
+                resonanceThreshold: 2500,
+                baseSpeed: 2.0,
+                playerSpeed: 0.15,
+                fireRate: 8,
+                invulnFrames: 120
+            }
+        };
+
+        // --- ENGINE SETUP ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let dpr = window.devicePixelRatio || 1;
+        
+        function resize() {
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- GAME STATE ---
+        let state = {
+            running: false,
+            phase: 'SURVIVAL', // 'SURVIVAL' or 'RESONANCE'
+            score: 0,
+            frames: 0,
+            lives: 3,
+            shake: 0,
+            gridOffset: 0,
+            oscillation: 440,
+            difficulty: 1.0 // Multiplier for speed and spawn rate
+        };
+
+        // Difficulty Tracking
+        let lastDifficultyTier = 0;
+
+        // --- ENTITIES ---
+        let player = { x: 0, y: 0, tx: 0, size: 40, invuln: 0, visible: true };
+        let projectiles = [];
+        let enemies = [];
+        let nodes = [];
+        let particles = [];
+
+        // --- INPUT ---
+        let isTouch = false;
+        
+        const setTarget = (cx) => {
+            if(!state.running) return;
+            player.tx = cx;
+        };
+
+        window.addEventListener('mousemove', e => { if(!isTouch) setTarget(e.clientX); });
+        window.addEventListener('touchmove', e => { 
+            isTouch = true; 
+            e.preventDefault(); 
+            setTarget(e.touches[0].clientX); 
+        }, { passive: false });
+        window.addEventListener('touchstart', e => {
+            isTouch = true;
+            setTarget(e.touches[0].clientX);
+        }, { passive: false });
+
+        // --- LOGGING SYSTEM ---
+        const logContainer = document.getElementById('sys-log');
+        
+        function log(msg, type='info') {
+            const el = document.createElement('div');
+            el.className = `log-line ${type}`;
+            el.innerText = `> ${msg}`;
+            logContainer.appendChild(el);
+            if(logContainer.children.length > 5) logContainer.removeChild(logContainer.children[0]);
+        }
+
+        // --- CORE FUNCTIONS ---
+
+        function init() {
+            // Reset State
+            state.running = true;
+            state.phase = 'SURVIVAL';
+            state.score = 0;
+            state.frames = 0;
+            state.lives = 3;
+            state.shake = 0;
+            state.difficulty = 1.0;
+            lastDifficultyTier = 0;
+            
+            // Reset Entities
+            player.x = window.innerWidth / 2;
+            player.y = window.innerHeight - 100;
+            player.tx = player.x;
+            player.invuln = 0;
+            
+            projectiles = [];
+            enemies = [];
+            nodes = [];
+            particles = [];
+
+            // UI Reset
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            updateUI();
+            
+            // Log Clear
+            logContainer.innerHTML = '';
+            log("SYSTEM INITIALIZED", 'info');
+            log("OBJECTIVE: 2500 DATA", 'warn');
+            
+            // Telemetry Reset
+            document.querySelectorAll('.t-module').forEach(m => {
+                m.style.borderColor = CONFIG.colors.pink;
+                m.style.background = `linear-gradient(to left, rgba(255, 0, 255, 0.05), transparent)`;
+            });
+
+            loop();
+        }
+
+        function updateUI() {
+            // Score
+            document.getElementById('score-val').innerText = `${state.score} / ${CONFIG.game.resonanceThreshold}`;
+            
+            // Lives
+            const pips = document.getElementById('lives-container').children;
+            for(let i=0; i<3; i++) {
+                if(i < state.lives) pips[i].classList.remove('lost');
+                else pips[i].classList.add('lost');
+            }
+
+            // Telemetry
+            document.getElementById('val-coords').innerText = `X:${Math.floor(player.x)}`;
+            
+            // Oscillation Fluff
+            if(state.frames % 10 === 0) {
+                state.oscillation = 430 + Math.floor(Math.random() * 20);
+                document.getElementById('val-osc').innerText = `${state.oscillation}Hz`;
+            }
+
+            // Threat/Entropy Monitor
+            const elThreat = document.getElementById('val-threat');
+            if(state.phase === 'RESONANCE') {
+                elThreat.innerText = "NULL // HARMONIZED";
+                elThreat.style.color = CONFIG.colors.gold;
+            } else {
+                // Show difficulty multiplier as Entropy Level
+                elThreat.innerText = `ENTROPY ${state.difficulty.toFixed(1)}x`;
+                
+                // Color scaling based on difficulty
+                if(state.difficulty < 1.3) elThreat.style.color = CONFIG.colors.cyan;
+                else if(state.difficulty < 1.6) elThreat.style.color = CONFIG.colors.pink;
+                else elThreat.style.color = CONFIG.colors.red;
+            }
+        }
+
+        function enterResonance() {
+            if(state.phase === 'RESONANCE') return;
+            state.phase = 'RESONANCE';
+            
+            log("THRESHOLD REACHED", 'gold');
+            log("INITIATING HARMONY...", 'gold');
+            
+            // Visual shift for Telemetry
+            document.querySelectorAll('.t-module').forEach(m => {
+                m.style.borderColor = CONFIG.colors.gold;
+                m.style.background = `linear-gradient(to left, rgba(255, 215, 0, 0.1), transparent)`;
+            });
+            document.querySelectorAll('.t-label').forEach(l => l.style.color = CONFIG.colors.gold);
+            document.querySelectorAll('.t-data').forEach(d => d.style.color = '#fff');
+
+            // Clear Enemies
+            enemies.forEach(e => {
+                createExplosion(e.x, e.y, CONFIG.colors.gold, 15);
+            });
+            enemies = [];
+            projectiles = []; // No longer needed
+            
+            state.shake = 20; // Big impact
+        }
+
+        // --- UPDATE LOOP ---
+        function update() {
+            // Player
+            player.x += (player.tx - player.x) * CONFIG.game.playerSpeed;
+            // Clamp
+            if(player.x < player.size) player.x = player.size;
+            if(player.x > window.innerWidth - player.size) player.x = window.innerWidth - player.size;
+            
+            // I-Frames
+            if(player.invuln > 0) player.invuln--;
+            player.visible = !(player.invuln > 0 && Math.floor(state.frames / 4) % 2 === 0);
+
+            // Shooting (Only in Survival)
+            if(state.phase === 'SURVIVAL') {
+                if(state.frames % CONFIG.game.fireRate === 0) {
+                    projectiles.push({ x: player.x, y: player.y - 20, active: true });
+                }
+            }
+
+            // Projectiles
+            projectiles.forEach(p => {
+                p.y -= 20;
+                if(p.y < 0) p.active = false;
+            });
+            projectiles = projectiles.filter(p => p.active);
+
+            // Enemies (Chaos) - Only spawn/update in SURVIVAL
+            if(state.phase === 'SURVIVAL') {
+                
+                // --- HARDENING DYNAMICS ---
+                // Calculate difficulty tier
+                const progress = Math.min(state.score / CONFIG.game.resonanceThreshold, 1.0);
+                
+                // Difficulty scales from 1.0 to 1.8 based on score
+                state.difficulty = 1.0 + (progress * 0.8);
+                
+                // Hardening Events Log
+                const currentTier = Math.floor(state.score / 600);
+                if (currentTier > lastDifficultyTier && currentTier <= 3) {
+                    lastDifficultyTier = currentTier;
+                    if(currentTier === 1) log("ENTROPY RISING", 'info');
+                    if(currentTier === 2) log("THREAT ESCALATION", 'warn');
+                    if(currentTier === 3) log("MAXIMUM VELOCITY", 'warn');
+                }
+
+                // Spawn Logic
+                // Base rate decreases (gets faster) as difficulty increases
+                // At 1.0 diff -> 45 frames. At 1.8 diff -> ~25 frames.
+                let spawnRate = Math.floor(45 / state.difficulty);
+                
+                if(state.frames % spawnRate === 0) {
+                    const radius = 20 + Math.random() * 15;
+                    enemies.push({
+                        x: Math.random() * (window.innerWidth - radius*2) + radius,
+                        y: -50,
+                        radius: radius,
+                        // Speed scales with difficulty
+                        speed: ((Math.random() + 1) * 2.5) * state.difficulty,
+                        hp: Math.floor(radius/8),
+                        active: true,
+                        angle: 0,
+                        color: Math.random() > 0.5 ? CONFIG.colors.red : CONFIG.colors.pink
+                    });
+                }
+
+                // Update & Collide
+                enemies.forEach(e => {
+                    e.y += e.speed;
+                    e.angle += 0.05 * state.difficulty; // Spin faster too
+                    if(e.y > window.innerHeight + 50) e.active = false;
+
+                    // Hit by Bullet
+                    projectiles.forEach(p => {
+                        if(!p.active || !e.active) return;
+                        const dist = Math.hypot(p.x - e.x, p.y - e.y);
+                        if(dist < e.radius) {
+                            p.active = false;
+                            e.hp--;
+                            createExplosion(p.x, p.y, '#fff', 2);
+                            if(e.hp <= 0) {
+                                e.active = false;
+                                state.score += 100;
+                                createExplosion(e.x, e.y, e.color, 10);
+                                if(state.score >= CONFIG.game.resonanceThreshold) enterResonance();
+                            }
+                        }
+                    });
+
+                    // Hit Player
+                    if(e.active && player.invuln === 0) {
+                        const dist = Math.hypot(e.x - player.x, e.y - player.y);
+                        if(dist < e.radius + player.size/2) {
+                            e.active = false;
+                            takeDamage();
+                        }
+                    }
+                });
+                enemies = enemies.filter(e => e.active);
+            }
+
+            // Nodes (Harmony) - Only spawn/update in RESONANCE
+            if(state.phase === 'RESONANCE') {
+                if(state.frames % 20 === 0) {
+                    nodes.push({
+                        x: Math.random() * (window.innerWidth - 40) + 20,
+                        y: -50,
+                        active: true,
+                        angle: 0
+                    });
+                }
+                
+                nodes.forEach(n => {
+                    n.y += 4; // Faster, smooth flow
+                    n.angle += 0.02;
+                    if(n.y > window.innerHeight + 50) n.active = false;
+                    
+                    // Collection (No damage, just points/visuals)
+                    const dist = Math.hypot(n.x - player.x, n.y - player.y);
+                    if(dist < 40 + player.size/2) {
+                        n.active = false;
+                        state.score += 50; // Bonus points
+                        createExplosion(n.x, n.y, CONFIG.colors.gold, 5);
+                        // Heal player in flow state?
+                        if(state.lives < 3 && Math.random() > 0.8) state.lives++; 
+                    }
+                });
+                nodes = nodes.filter(n => n.active);
+            }
+
+            // Particles
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.05;
+            });
+            particles = particles.filter(p => p.life > 0);
+
+            // Screen Shake Decay
+            if(state.shake > 0) state.shake *= 0.9;
+            if(state.shake < 0.5) state.shake = 0;
+
+            state.frames++;
+        }
+
+        function takeDamage() {
+            state.lives--;
+            state.shake = 20;
+            player.invuln = CONFIG.game.invulnFrames;
+            createExplosion(player.x, player.y, CONFIG.colors.red, 20);
+            log("INTEGRITY LOSS DETECTED", 'warn');
+            
+            if(state.lives <= 0) {
+                state.running = false;
+                document.getElementById('final-score-disp').innerText = `DATA: ${state.score}`;
+                document.getElementById('game-over-screen').classList.remove('hidden');
+            }
+        }
+
+        function createExplosion(x, y, color, count) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 1.0,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+
+        // --- DRAW LOOP ---
+        function draw() {
+            // Clear
+            ctx.fillStyle = CONFIG.colors.bg;
+            ctx.fillRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio); // Fix for scaled context
+
+            // Shake Transform
+            ctx.save();
+            if(state.shake > 0) {
+                const dx = (Math.random() - 0.5) * state.shake;
+                const dy = (Math.random() - 0.5) * state.shake;
+                ctx.translate(dx, dy);
+            }
+
+            // Dynamic Background
+            drawBackground();
+
+            // Player
+            if(player.visible) drawPlayer();
+
+            // Projectiles
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = CONFIG.colors.pink;
+            ctx.fillStyle = CONFIG.colors.pink;
+            projectiles.forEach(p => {
+                ctx.fillRect(p.x - 2, p.y, 4, 20);
+            });
+            ctx.shadowBlur = 0;
+
+            // Enemies
+            enemies.forEach(e => drawEnemy(e));
+
+            // Nodes (Gold)
+            nodes.forEach(n => drawNode(n));
+
+            // Particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+            });
+            ctx.globalAlpha = 1.0;
+
+            ctx.restore();
+        }
+
+        function drawBackground() {
+            // Determine Palette based on Phase
+            const isRes = state.phase === 'RESONANCE';
+            const gridColor = isRes ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255, 0, 255, 0.2)';
+            const sunColor1 = isRes ? '#fff' : '#ffcc00';
+            const sunColor2 = isRes ? CONFIG.colors.gold : CONFIG.colors.pink;
+            
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            // Retro Sun
+            const sunGrad = ctx.createLinearGradient(w/2, h*0.2, w/2, h*0.45);
+            sunGrad.addColorStop(0, sunColor1);
+            sunGrad.addColorStop(1, sunColor2);
+            
+            ctx.save();
+            ctx.globalAlpha = 0.2;
+            ctx.fillStyle = sunGrad;
+            ctx.beginPath();
+            ctx.arc(w/2, h*0.4, 150, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Scanlines on Sun
+            ctx.fillStyle = CONFIG.colors.bg;
+            for(let i=0; i<150; i+=6) {
+                ctx.fillRect(w/2 - 160, h*0.4 - 75 + i, 320, 2);
+            }
+            ctx.restore();
+
+            // Perspective Grid
+            ctx.strokeStyle = gridColor;
+            ctx.lineWidth = 1;
+            const horizon = h * 0.4;
+            const cx = w/2;
+
+            // Verticals (Fan out)
+            for(let i=-10; i<=10; i+=1) {
+                if(i===0) continue;
+                ctx.beginPath();
+                ctx.moveTo(cx + i*40, horizon);
+                ctx.lineTo(cx + i*300, h*1.5);
+                ctx.stroke();
+            }
+
+            // Horizontals (Moving)
+            state.gridOffset = (state.gridOffset + (isRes ? 3 : 1.5)) % 40; // Faster in Resonance
+            
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, horizon, w, h-horizon);
+            ctx.clip();
+            
+            for(let y=horizon; y<h+40; y+=40) {
+                const dy = y + state.gridOffset;
+                // Simple perspective fake: lines get thicker/brighter closer to bottom? 
+                // Keeping it simple line for performance
+                if(dy < h) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, dy);
+                    ctx.lineTo(w, dy);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+        }
+
+        function drawPlayer() {
+            const isRes = state.phase === 'RESONANCE';
+            const primary = isRes ? CONFIG.colors.gold : CONFIG.colors.cyan;
+            const secondary = isRes ? '#fff' : CONFIG.colors.pink;
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = primary;
+            ctx.strokeStyle = primary;
+            ctx.lineWidth = 2;
+            ctx.fillStyle = '#000';
+
+            // Ship
+            ctx.beginPath();
+            ctx.moveTo(0, -25);
+            ctx.lineTo(20, 20);
+            ctx.lineTo(0, 10);
+            ctx.lineTo(-20, 20);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Engine
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = secondary;
+            ctx.fillStyle = secondary;
+            
+            // Gentle pulse in Resonance, jagged in Survival
+            const flick = isRes ? Math.sin(state.frames * 0.2)*5 : Math.random()*15;
+            
+            ctx.beginPath();
+            ctx.moveTo(-5, 22);
+            ctx.lineTo(5, 22);
+            ctx.lineTo(0, 35 + flick);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawEnemy(e) {
+            ctx.save();
+            ctx.translate(e.x, e.y);
+            ctx.rotate(e.angle);
+            
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = e.color;
+            ctx.strokeStyle = e.color;
+            ctx.lineWidth = 2;
+            
+            // Geometric Shape
+            ctx.beginPath();
+            const sides = 4;
+            for(let i=0; i<sides; i++) {
+                const r = i * (Math.PI*2)/sides;
+                ctx.lineTo(Math.cos(r)*e.radius, Math.sin(r)*e.radius);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Inner Core
+            ctx.fillStyle = e.color;
+            ctx.globalAlpha = 0.2;
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawNode(n) {
+            ctx.save();
+            ctx.translate(n.x, n.y);
+            ctx.rotate(n.angle);
+            
+            // Pure Gold Ring
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = CONFIG.colors.gold;
+            ctx.strokeStyle = CONFIG.colors.gold;
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, 15, 0, Math.PI*2);
+            ctx.stroke();
+            
+            // Inner diamond
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.lineTo(8, 0);
+            ctx.lineTo(0, 8);
+            ctx.lineTo(-8, 0);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // --- LOOP CONTROL ---
+        function loop() {
+            if(!state.running) return;
+            
+            update();
+            updateUI();
+            draw();
+            
+            requestAnimationFrame(loop);
+        }
+
+        // --- DOM EVENTS ---
+        document.getElementById('btn-start').addEventListener('click', init);
+        document.getElementById('btn-restart').addEventListener('click', init);
+
+    </script>
+</body>
+</html>
+
